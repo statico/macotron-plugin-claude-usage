@@ -302,7 +302,7 @@ function cardHeight(subtitle, v) {
 
 const CSS =
   "<style>" +
-  "body{margin:0;font:13px -apple-system,sans-serif;color:canvastext}" +
+  "body{margin:0;padding:8px 14px;font:13px -apple-system,sans-serif;color:canvastext}" +
   ".row{border:0.5px solid color-mix(in srgb,canvastext 10%,transparent);border-radius:8px;padding:8px 10px;margin-bottom:6px}" +
   ".head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px}" +
   ".t{font-weight:500}.tag{font-size:9px;font-weight:500;color:graytext;" +
@@ -313,14 +313,13 @@ const CSS =
   ".fill{height:4px;border-radius:2.5px;transition:width .6s ease-in-out}" +
   ".mark{position:absolute;top:-2px;width:2.5px;height:8px;border-radius:1px}" +
   ".reset{font-size:9px;color:graytext;margin-top:4px}" +
-  ".err{font-size:11px;color:" + SYS.red[0] + "}" +
   "</style>";
 
+// The popover's own inset: 14pt sides, 8pt top and bottom.
 function dashboard(dark) {
   const now = Date.now();
-  if (!data) return { html: CSS + `<div class="err">${esc(error || "Loading…")}</div>`, height: 40 };
   let html = CSS;
-  let height = error ? 20 : 0;
+  let height = 16;
   const add = (title, tag, subtitle, v) => {
     html += card(title, tag, subtitle, v, dark, now);
     height += cardHeight(subtitle, v);
@@ -329,20 +328,21 @@ function dashboard(dark) {
   add("All models", "Weekly", "", view(data.week, WEEK_MS, now));
   // Per-model rows carry no marker in the original, hence no duration.
   for (const m of data.models) if (m.pct > 0) add(m.name, "Weekly", "", view(m, 0, now));
-  if (error) html += `<div class="err">${esc(error)}</div>`;
   return { html, height };
 }
 
 function paint() {
   const dark = macotron.system.darkMode();
   const icon = render(dark);
-  const dash = dashboard(dark);
   macotron.menubar.status("claude-usage", {
     title: "",
     svg: icon.svg,
     template: icon.template,
     menu: [
-      { title: "", html: dash.html, width: 280, height: dash.height },
+      // A plain row until there is something to draw; stale data stays up
+      // with the error under it.
+      ...(data ? [Object.assign({ title: "", width: 280 }, dashboard(dark))] : [{ title: error || "Loading…" }]),
+      ...(data && error ? [{ title: error }] : []),
       "-",
       { title: "Refresh", onClick: refresh },
       { title: "Open claude.ai", onClick: () => macotron.url.open("https://claude.ai") },
