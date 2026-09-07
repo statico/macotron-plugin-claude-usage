@@ -22,7 +22,7 @@ same icon styles, same thresholds, same colors, same pace marker.
    `sessionKey` cookie for claude.ai, and paste its value into the plugin's
    **Session key** field. Macotron keeps it in the Keychain.
 
-Needs Macotron 0.6 or later: earlier versions drop the `Cookie` header.
+Needs a Macotron build newer than 0.5.1: earlier versions drop the `Cookie` header.
 
 ## How it works
 

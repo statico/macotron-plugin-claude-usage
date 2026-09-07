@@ -6,7 +6,7 @@ const calls = { status: [], checks: [] };
 const store = {};
 globalThis.localStorage = { getItem: (k) => store[k] || null, setItem: (k, v) => (store[k] = v), removeItem: (k) => delete store[k] };
 globalThis.macotron = {
-  plugin: (m) => ({ sessionKey: "sk-ant-test", show: "both", style: "battery", color: "multi", labels: true, pace: true, remaining: false, refreshMs: 30000 }),
+  plugin: (m) => ({ sessionKey: "sk-ant-test", show: "both", style: "battery", color: "multi", labels: true, pace: true, refreshMs: 30000 }),
   system: { darkMode: () => true },
   menubar: { status: (id, o) => calls.status.push(o) },
   checks: (c) => calls.checks.push(c),
@@ -56,6 +56,9 @@ const d = t.parse(JSON.parse(`{"five_hour":{"utilization":"42%","resets_at":"${i
 assert(d.session.pct === 42 && d.week.pct === 61, "utilization parsed");
 assert(d.models.length === 1 && d.models[0].pct === 80 && d.models[0].name === "Opus", "limits override legacy opus");
 assert(t.view({ pct: 50, resets: now - 1 }, 5 * 3600e3, now).pct === 0, "expired session reads 0");
+assert(t.view({ pct: 50, resets: now - 1 }, 7 * 86400e3, now).pct === 50, "expired week keeps its number");
+assert(t.view({ pct: 50, resets: now + 1e6 }, 0, now).mark === null, "model rows have no marker");
+assert(t.view({ pct: -3, resets: now + 1e6 }, 5 * 3600e3, now).shown === 0, "shown never goes negative");
 
 // Every style renders both quotas into well-formed SVG with a pace tick.
 t.setData(d);

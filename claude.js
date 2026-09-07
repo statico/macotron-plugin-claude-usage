@@ -56,7 +56,6 @@ const opts = macotron.plugin({
       default: true,
       help: "A tick at the elapsed fraction of the window, colored by whether usage is ahead of it.",
     },
-    remaining: { type: "boolean", label: "Show remaining", default: false, help: "Count down instead of up." },
     refreshMs: { type: "number", label: "Refresh interval", default: 30000, help: "Milliseconds. The default is 30 seconds." },
   },
 });
@@ -67,7 +66,9 @@ const UA =
 const HOUR = 3600e3;
 const SESSION_MS = 5 * HOUR;
 const WEEK_MS = 7 * 24 * HOUR;
-const FONT = "-apple-system, 'Helvetica Neue', Helvetica, sans-serif";
+// CoreSVG wants PostScript names; a weight attribute does nothing.
+const FONT = "Helvetica";
+const FONT_BOLD = "Helvetica-Bold";
 
 // macOS system colors, light and dark.
 const SYS = {
@@ -79,16 +80,15 @@ const SYS = {
   purple: ["#AF52DE", "#BF5AF2"],
 };
 const PACE_COLOR = ["green", "teal", "yellow", "orange", "red", "purple"];
-const PACE_NAME = ["Comfortable", "On track", "Warming", "Pressing", "Critical", "Runaway"];
 
-let data = null; // { session, week, models: [{ name, pct, resets }], fetched }
+let data = null; // { session, week, models: [{ name, pct, resets }] }
 let error = null;
 
 // ---------------------------------------------------------------- math
 
 // How far through the window we are, 0..1. A reset in the past is 1.
 function elapsed(resets, duration, now) {
-  if (!resets) return null;
+  if (!resets || !duration) return null;
   if (resets <= now) return 1;
   return Math.min(Math.max((duration - (resets - now)) / duration, 0), 1);
 }
@@ -98,10 +98,6 @@ function statusColor(pct, frac) {
   if (frac !== null && frac >= 0.15 && frac < 1 && pct > 0) {
     const projected = pct / 100 / frac;
     return projected < 0.7 ? "green" : projected < 0.9 ? "orange" : "red";
-  }
-  if (opts.remaining) {
-    const left = 100 - pct;
-    return left >= 30 ? "green" : left >= 10 ? "orange" : "red";
   }
   return pct < 70 ? "green" : pct < 90 ? "orange" : "red";
 }
@@ -127,15 +123,14 @@ function resetsIn(resets, now) {
 
 // One quota as the renderer wants it.
 function view(q, duration, now) {
-  const pct = !q ? 0 : q.resets && q.resets <= now ? 0 : q.pct;
+  // Only the session reads zero once its window has passed.
+  const pct = !q ? 0 : duration === SESSION_MS && q.resets && q.resets <= now ? 0 : q.pct;
   const frac = q ? elapsed(q.resets, duration, now) : null;
-  const shown = opts.remaining ? 100 - pct : pct;
   const tier = opts.pace ? paceTier(pct, frac) : null;
   return {
     pct,
-    shown,
-    frac,
-    mark: opts.pace && frac !== null ? (opts.remaining ? 1 - frac : frac) : null,
+    shown: Math.max(0, pct),
+    mark: opts.pace ? frac : null,
     color: statusColor(pct, frac),
     tier,
     resets: q && q.resets ? q.resets : null,
@@ -150,7 +145,7 @@ function color(name, dark) {
 
 function text(x, y, size, weight, fill, opacity, s, anchor) {
   return (
-    `<text x="${x}" y="${y}" font-family="${FONT}" font-size="${size}" font-weight="${weight}"` +
+    `<text x="${x}" y="${y}" font-family="${weight >= 600 ? FONT_BOLD : FONT}" font-size="${size}"` +
     ` fill="${fill}" fill-opacity="${opacity}" text-anchor="${anchor || "start"}">${s}</text>`
   );
 }
@@ -163,22 +158,23 @@ function tick(x1, y1, x2, y2, stroke) {
 // is "Session"/"Week", `fg` the bar's text color, `fill` the status color,
 // `pace` the pace tick color (fg when pace tiers are off or unavailable).
 const STYLES = {
+  // The status bar resamples anything taller than 18pt, so the tracker's
+  // 42x28 layout is squeezed vertically: an 8pt bar over a 7.5pt label.
   battery(v, label, fg, fill, pace) {
-    const w = 42;
     let out =
-      `<rect x="1.6" y="1.6" width="39.4" height="9.4" rx="2.5" fill="none" stroke="${fg}" stroke-opacity="0.5" stroke-width="1.2"/>`;
+      `<rect x="1.6" y="1" width="39.4" height="7" rx="2" fill="none" stroke="${fg}" stroke-opacity="0.5" stroke-width="1.2"/>`;
     const fw = 36 * Math.min(v.shown / 100, 1);
-    if (fw > 1) out += `<rect x="3" y="3" width="${fw}" height="6" rx="1.5" fill="${fill}"/>`;
+    if (fw > 1) out += `<rect x="3" y="2.5" width="${fw}" height="4" rx="1.2" fill="${fill}"/>`;
     if (v.mark !== null) {
       const x = Math.round(3 + 36 * v.mark);
-      out += tick(x, 1, x, 11, pace);
+      out += tick(x, 1, x, 8, pace);
     }
-    out += text(21, 20, 9, 500, fg, 0.85, opts.labels ? label : Math.round(v.shown) + "%", "middle");
-    return { w, h: 22, body: out };
+    out += text(21, 17, 7.5, 500, fg, 0.85, opts.labels ? label : Math.floor(v.shown) + "%", "middle");
+    return { w: 42, h: 18, body: out };
   },
 
   bar(v, label, fg, fill, pace) {
-    const x0 = opts.labels ? 12 : 0;
+    const x0 = opts.labels ? 13 : 1;
     let out = "";
     if (opts.labels) out += text(1, 13, 10, 600, fg, 0.9, label[0]);
     out += `<rect x="${x0}" y="4.5" width="40" height="9" rx="4" fill="${fg}" fill-opacity="0.2"/>`;
@@ -194,7 +190,7 @@ const STYLES = {
   },
 
   ring(v, label, fg, fill, pace) {
-    const size = opts.labels ? 22 : 18;
+    const size = 18;
     const r = (size - 4) / 2;
     const cx = 1 + size / 2;
     const cy = size / 2;
@@ -210,13 +206,13 @@ const STYLES = {
       const a = (-90 + 360 * v.mark) * (Math.PI / 180);
       out += tick(cx + (r - 2) * Math.cos(a), cy + (r - 2) * Math.sin(a), cx + (r + 2) * Math.cos(a), cy + (r + 2) * Math.sin(a), pace);
     }
-    if (opts.labels) out += text(cx, cy + 3.2, 9, 700, fg, 1, label[0], "middle");
+    if (opts.labels) out += text(cx, cy + 3, 8, 700, fg, 1, label[0], "middle");
     return { w: size + 1, h: size, body: out };
   },
 
   percent(v, label, fg, fill, pace) {
-    const s = (opts.labels ? label[0] + ": " : "") + Math.round(v.shown) + "%";
-    const tw = Math.ceil(s.length * 7.2);
+    const s = (opts.labels ? label[0] + ": " : "") + Math.floor(v.shown) + "%";
+    const tw = Math.ceil(s.length * 7.2) + 4;
     let out = text(2, 13, 12, 600, fill, 1, s);
     let w = tw + 2;
     if (v.tier !== null) {
@@ -227,11 +223,11 @@ const STYLES = {
   },
 
   compact(v, label, fg, fill, pace) {
-    let x = 0;
+    let x = 1;
     let out = "";
     if (opts.labels) {
-      out += text(0, 12.5, 9, 500, fg, 0.85, label[0] + ":");
-      x = 17;
+      out += text(1, 12.5, 9, 500, fg, 0.85, label[0] + ":");
+      x = 18;
     }
     out += `<circle cx="${x + 4}" cy="9" r="4" fill="${fill}"/>`;
     x += 8;
@@ -279,37 +275,44 @@ function esc(s) {
   return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 }
 
+const DASH_GREEN = ["#1B6B34", "#3CC75F"];
+
 function card(title, tag, subtitle, v, dark, now) {
-  const fill = color(v.color, dark);
-  const pace = v.tier !== null ? color(PACE_COLOR[v.tier], dark) : "var(--macotron-label)";
+  const fill = v.color === "green" ? DASH_GREEN[dark ? 1 : 0] : color(v.color, dark);
+  const pace = v.tier !== null ? color(PACE_COLOR[v.tier], dark) : "canvastext";
   const width = Math.min(v.shown / 100, 1) * 100;
   return (
     `<div class="row"><div class="head"><div class="t">${esc(title)}` +
     (tag ? `<span class="tag">${tag}</span>` : "") +
     (subtitle ? `<div class="sub">${esc(subtitle)}</div>` : "") +
-    `</div><div class="pct" style="color:${fill}">${Math.round(v.shown)}%</div></div>` +
+    `</div><div class="pct" style="color:${fill}">${Math.floor(v.shown)}%</div></div>` +
     `<div class="bar"><div class="fill" style="width:${width}%;background:${fill}"></div>` +
     (v.mark !== null ? `<div class="mark" style="left:calc(${v.mark * 100}% - 0.75px);background:${pace}"></div>` : "") +
     `</div>` +
     (v.resets ? `<div class="reset">Resets in ${resetsIn(v.resets, now)}</div>` : "") +
-    (v.tier !== null ? `<div class="reset">Pace: <span style="color:${pace}">${PACE_NAME[v.tier]}</span></div>` : "") +
     `</div>`
   );
 }
 
+// Card height in points: frame and head, then a line each for subtitle and
+// reset. The web row clips, so this has to be right.
+function cardHeight(subtitle, v) {
+  return 48 + (subtitle ? 13 : 0) + (v.resets ? 15 : 0);
+}
+
 const CSS =
   "<style>" +
-  "body{margin:0;font:13px " + FONT + ";color:var(--macotron-label)}" +
-  ".row{border:0.5px solid color-mix(in srgb,var(--macotron-label) 10%,transparent);border-radius:8px;padding:8px 10px;margin-bottom:6px}" +
+  "body{margin:0;font:13px -apple-system,sans-serif;color:canvastext}" +
+  ".row{border:0.5px solid color-mix(in srgb,canvastext 10%,transparent);border-radius:8px;padding:8px 10px;margin-bottom:6px}" +
   ".head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px}" +
-  ".t{font-weight:500}.tag{font-size:9px;font-weight:500;color:var(--macotron-secondary-label);" +
-  "background:color-mix(in srgb,var(--macotron-label) 8%,transparent);border-radius:99px;padding:1px 5px;margin-left:6px;vertical-align:1px}" +
-  ".sub{font-size:10px;color:var(--macotron-secondary-label);margin-top:1px}" +
+  ".t{font-weight:500}.tag{font-size:9px;font-weight:500;color:graytext;" +
+  "background:color-mix(in srgb,canvastext 8%,transparent);border-radius:99px;padding:1px 5px;margin-left:6px;vertical-align:1px}" +
+  ".sub{font-size:10px;color:graytext;margin-top:1px}" +
   ".pct{font-weight:600;font-variant-numeric:tabular-nums}" +
-  ".bar{position:relative;height:4px;border-radius:2.5px;background:color-mix(in srgb,var(--macotron-label) 8%,transparent)}" +
+  ".bar{position:relative;height:4px;border-radius:2.5px;background:color-mix(in srgb,canvastext 8%,transparent)}" +
   ".fill{height:4px;border-radius:2.5px;transition:width .6s ease-in-out}" +
   ".mark{position:absolute;top:-2px;width:2.5px;height:8px;border-radius:1px}" +
-  ".reset{font-size:9px;color:var(--macotron-secondary-label);margin-top:4px}" +
+  ".reset{font-size:9px;color:graytext;margin-top:4px}" +
   ".err{font-size:11px;color:" + SYS.red[0] + "}" +
   "</style>";
 
@@ -317,16 +320,17 @@ function dashboard(dark) {
   const now = Date.now();
   if (!data) return { html: CSS + `<div class="err">${esc(error || "Loading…")}</div>`, height: 40 };
   let html = CSS;
-  html += card("Session Usage", "", "5-hour rolling window", view(data.session, SESSION_MS, now), dark, now);
-  html += card("All models", "Weekly", "", view(data.week, WEEK_MS, now), dark, now);
-  let n = 2;
-  for (const m of data.models) {
-    if (m.pct <= 0) continue;
-    html += card(m.name, "Weekly", "", view(m, WEEK_MS, now), dark, now);
-    n++;
-  }
+  let height = error ? 20 : 0;
+  const add = (title, tag, subtitle, v) => {
+    html += card(title, tag, subtitle, v, dark, now);
+    height += cardHeight(subtitle, v);
+  };
+  add("Session Usage", "", "5-hour rolling window", view(data.session, SESSION_MS, now));
+  add("All models", "Weekly", "", view(data.week, WEEK_MS, now));
+  // Per-model rows carry no marker in the original, hence no duration.
+  for (const m of data.models) if (m.pct > 0) add(m.name, "Weekly", "", view(m, 0, now));
   if (error) html += `<div class="err">${esc(error)}</div>`;
-  return { html, height: n * 74 + (error ? 20 : 0) };
+  return { html, height };
 }
 
 function paint() {
@@ -349,7 +353,11 @@ function paint() {
     {
       title: "claude.ai",
       ok: !error,
-      message: error || (data ? "Session " + Math.round(data.session.pct) + "% · Week " + Math.round(data.week.pct) + "%" : "Waiting"),
+      message:
+        error ||
+        (data
+          ? "Session " + Math.floor(view(data.session, SESSION_MS, Date.now()).pct) + "% · Week " + Math.floor(data.week.pct) + "%"
+          : "Waiting"),
     },
   ]);
 }
@@ -358,12 +366,13 @@ function paint() {
 
 async function api(path) {
   const r = await macotron.http.get(API + path, {
-    headers: { Cookie: "sessionKey=" + opts.sessionKey, Accept: "application/json", "User-Agent": UA },
+    headers: { Cookie: "sessionKey=" + String(opts.sessionKey).trim(), Accept: "application/json", "User-Agent": UA },
     timeout: 15000,
   });
   if (r.status === 0) throw new Error("Offline: " + r.body);
   if (r.status === 401 || r.status === 403) {
-    throw new Error(/just a moment|cf-mitigated/i.test(r.body) ? "Blocked by Cloudflare" : "Session key rejected");
+    const cf = /just a moment|cf-mitigated/i.test(r.body) || (r.headers && r.headers["cf-mitigated"]);
+    throw new Error(cf ? "Blocked by Cloudflare, try again later" : "Session key rejected");
   }
   if (r.status !== 200) throw new Error("HTTP " + r.status + " from " + path);
   return JSON.parse(r.body);
@@ -394,7 +403,7 @@ function parse(u) {
     if (i >= 0) models[i] = Object.assign(models[i], q, { name: models[i].name });
     else models.push(q);
   }
-  return { session: quota(u.five_hour), week: quota(u.seven_day), models, fetched: Date.now() };
+  return { session: quota(u.five_hour), week: quota(u.seven_day), models };
 }
 
 async function orgId() {
@@ -406,11 +415,15 @@ async function orgId() {
   return orgs[0].uuid;
 }
 
+let busy = false;
+
 async function refresh() {
-  if (!opts.sessionKey) {
+  if (!String(opts.sessionKey || "").trim()) {
     error = "Set the session key in Settings";
     return paint();
   }
+  if (busy) return;
+  busy = true;
   try {
     const org = await orgId();
     data = parse(await api("/organizations/" + org + "/usage"));
@@ -420,6 +433,7 @@ async function refresh() {
     if (/rejected|HTTP 404/.test(error)) localStorage.removeItem("org");
     console.warn("claude: " + error);
   }
+  busy = false;
   paint();
 }
 
