@@ -1,5 +1,7 @@
 # Claude Usage for Macotron
 
+![The ring icons in the menu bar and the dashboard dropdown](screenshot.png)
+
 Session and weekly [claude.ai](https://claude.ai) quota in the
 [Macotron](https://github.com/statico/macotron) menu bar. A port of
 [Claude-Usage-Tracker](https://github.com/hamed-elfayome/Claude-Usage-Tracker):
