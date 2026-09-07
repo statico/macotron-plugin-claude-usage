@@ -158,18 +158,19 @@ function tick(x1, y1, x2, y2, stroke) {
 // is "Session"/"Week", `fg` the bar's text color, `fill` the status color,
 // `pace` the pace tick color (fg when pace tiers are off or unavailable).
 const STYLES = {
-  // The tracker's 42x28 layout with the empty band above the bar removed:
-  // the status button allows 22pt.
+  // The status bar resamples anything taller than 18pt, so the tracker's
+  // 42x28 layout is squeezed vertically: an 8pt bar over a 7.5pt label.
   battery(v, label, fg, fill, pace) {
-    let out = `<rect x="1" y="1" width="40" height="10" rx="2.5" fill="none" stroke="${fg}" stroke-opacity="0.5" stroke-width="1.2"/>`;
+    let out =
+      `<rect x="1.6" y="1" width="39.4" height="7" rx="2" fill="none" stroke="${fg}" stroke-opacity="0.5" stroke-width="1.2"/>`;
     const fw = 36 * Math.min(v.shown / 100, 1);
-    if (fw > 1) out += `<rect x="3" y="3" width="${fw}" height="6" rx="1.5" fill="${fill}"/>`;
+    if (fw > 1) out += `<rect x="3" y="2.5" width="${fw}" height="4" rx="1.2" fill="${fill}"/>`;
     if (v.mark !== null) {
       const x = Math.round(3 + 36 * v.mark);
-      out += tick(x, 1, x, 11, pace);
+      out += tick(x, 1, x, 8, pace);
     }
-    out += text(21, 20.5, 9, 500, fg, 0.85, opts.labels ? label : Math.floor(v.shown) + "%", "middle");
-    return { w: 42, h: 22, body: out };
+    out += text(21, 17, 7.5, 500, fg, 0.85, opts.labels ? label : Math.floor(v.shown) + "%", "middle");
+    return { w: 42, h: 18, body: out };
   },
 
   bar(v, label, fg, fill, pace) {
@@ -188,9 +189,11 @@ const STYLES = {
     return { w: x0 + 42, h: 18, body: out };
   },
 
+  // The tracker's labeled ring is 22pt; 18pt is all the status bar gives,
+  // so the stroke runs right to the edge of the slot.
   ring(v, label, fg, fill, pace) {
-    const size = opts.labels ? 22 : 18;
-    const r = (size - 4) / 2;
+    const size = 18;
+    const r = (size - 3) / 2;
     const cx = 1 + size / 2;
     const cy = size / 2;
     const c = 2 * Math.PI * r;
