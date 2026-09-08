@@ -13,14 +13,16 @@ const opts = macotron.plugin({
   title: "Claude Usage",
   description: "Session and weekly claude.ai quota graphs in the menu bar, with pace markers.",
   help:
-    "Sign in to claude.ai in a browser, open the developer tools, and copy the sessionKey cookie " +
-    "into the field below. Click the item for the dashboard.",
+    "The session key is claude.ai's sessionKey cookie. Sign in to claude.ai in Safari, then Develop → " +
+    "Show Web Inspector → Storage → Cookies → claude.ai (Chrome: Application → Cookies). Copy the " +
+    "sessionKey value, which starts with sk-ant-sid, into the field below. It expires when you sign out. " +
+    "Click the item for the dashboard.",
   options: {
     sessionKey: {
       type: "password",
       label: "Session key",
       required: true,
-      placeholder: "sk-ant-sid01-…",
+      placeholder: "sk-ant-sid02-…",
       help: "The sessionKey cookie from claude.ai. Stored in the Keychain.",
     },
     show: {

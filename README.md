@@ -20,9 +20,32 @@ same icon styles, same thresholds, same colors, same pace marker.
 1. Open Macotron. Go to Settings → Plugins → Catalog → Community.
 2. Find **Claude Usage**. Press **Add**.
 3. Read the source in the review sheet. Press **Add** again.
-4. Sign in to claude.ai in a browser. Open the developer tools, find the
-   `sessionKey` cookie for claude.ai, and paste its value into the plugin's
-   **Session key** field. Macotron keeps it in the Keychain.
+4. Paste your claude.ai session key into the plugin's **Session key** field.
+   Macotron keeps it in the Keychain. See below for where it comes from.
+
+## Where the session key comes from
+
+The key is the `sessionKey` cookie that claude.ai sets in your browser when
+you sign in. It starts with `sk-ant-sid` (`sk-ant-sid02-…` at the time of
+writing). There is no page on claude.ai that shows it; you read it out of the
+browser's cookie store:
+
+- **Safari**: enable the Develop menu (Settings → Advanced → Show features for
+  web developers). On claude.ai, choose Develop → Show Web Inspector, open the
+  **Storage** tab, expand **Cookies**, pick `claude.ai`, and copy the value of
+  `sessionKey`.
+- **Chrome, Arc, Edge**: on claude.ai press ⌥⌘I, open the **Application** tab,
+  expand **Cookies**, pick `https://claude.ai`, and copy the value of
+  `sessionKey`.
+- **Firefox**: press ⌥⌘I, open the **Storage** tab, expand **Cookies**.
+
+The cookie lasts until you sign out of claude.ai in that browser, so use a
+browser you stay signed in to. If the item shows "Session key rejected", sign
+in again and paste the new value.
+
+Claude-Usage-Tracker gets the same cookie by signing you in to claude.ai in an
+embedded web view; if you already have it in the Keychain from that app, it is
+the same value.
 
 Needs a Macotron build newer than 0.5.1: earlier versions drop the `Cookie` header.
 
