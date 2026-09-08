@@ -15,7 +15,21 @@ globalThis.macotron = {
   settings: { open() {} },
   http: {
     get: async (url) => {
-      if (url.endsWith("/organizations")) return { status: 200, body: JSON.stringify([{ uuid: "org1" }]), headers: {} };
+      // A Team member's login: a quota-less personal org, an API-console org
+      // that rejects the cookie, then the Team org that has the numbers.
+      if (url.endsWith("/organizations")) {
+        return {
+          status: 200,
+          headers: {},
+          body: JSON.stringify([
+            { uuid: "personal", name: "Personal", capabilities: ["chat"] },
+            { uuid: "console", name: "Console", capabilities: ["api"] },
+            { uuid: "team", name: "Team", capabilities: ["chat"] },
+          ]),
+        };
+      }
+      if (url.includes("/personal/")) return { status: 200, headers: {}, body: JSON.stringify({ five_hour: null, seven_day: null, limits: [] }) };
+      if (url.includes("/console/")) return { status: 403, headers: {}, body: "" };
       const in2h = new Date(Date.now() + 2 * 3600e3).toISOString();
       const in3d = new Date(Date.now() + 3 * 86400e3).toISOString();
       return {
@@ -83,5 +97,7 @@ setTimeout(() => {
   const last = calls.status[calls.status.length - 1];
   assert(last.svg.includes("<line") && last.menu[0].html.includes("Resets in"), "fetch → paint with tick and dashboard");
   assert(calls.checks[calls.checks.length - 1][0].ok === true, "check is green");
+  assert(store["claude-usage.org"] === "team", "picked the org with a quota, not the first: " + store["claude-usage.org"]);
+  assert(last.menu[0].html.includes("42%"), "dashboard shows the team org's numbers");
   console.log("ok: " + calls.status.length + " paints, styles " + Object.keys(t.STYLES).join(", "));
 }, 50);

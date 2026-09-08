@@ -3,6 +3,11 @@
 // A port of Claude-Usage-Tracker (hamed-elfayome) to a Macotron plugin: same
 // icon styles, same thresholds, same colors, same pace marker. Data comes from
 // claude.ai's own usage endpoint, authenticated with the sessionKey cookie.
+//
+// Works for personal (Pro/Max) and Team/Enterprise logins. A Team member's
+// login lists several orgs: a personal org with no quota, an API-console org
+// that 403s on /usage, and the Team org that holds the numbers. The plugin
+// probes each chat-capable org and remembers the one that reports a quota.
 
 const opts = macotron.plugin({
   title: "Claude Usage",
@@ -415,13 +420,49 @@ function parse(u) {
   return { session: quota(u.five_hour), week: quota(u.seven_day), models };
 }
 
-async function orgId() {
-  const cached = localStorage.getItem("org");
-  if (cached) return cached;
+const ORG_KEY = "claude-usage.org";
+
+function usage(org) {
+  return api("/organizations/" + org + "/usage");
+}
+
+// A quota-less usage reply is what a personal org returns when the seat that
+// actually consumes quota lives in a Team/Enterprise org on the same login.
+function hasQuota(u) {
+  return !!(u && (u.five_hour || u.seven_day || (Array.isArray(u.limits) && u.limits.length)));
+}
+
+// Find the org whose usage endpoint reports a quota. One login can carry a
+// personal org, an API-console org (403 on usage) and a Team/Enterprise org;
+// only one of them has the numbers, and it is not necessarily the first.
+async function fetchUsage() {
+  const cached = localStorage.getItem(ORG_KEY);
+  if (cached) {
+    const u = await usage(cached);
+    if (hasQuota(u)) return u;
+    localStorage.removeItem(ORG_KEY);
+  }
   const orgs = await api("/organizations");
-  if (!Array.isArray(orgs) || !orgs.length || !orgs[0].uuid) throw new Error("No organization on this account");
-  localStorage.setItem("org", orgs[0].uuid);
-  return orgs[0].uuid;
+  if (!Array.isArray(orgs) || !orgs.length) throw new Error("No organization on this account");
+  let fallback = null;
+  for (const o of orgs) {
+    if (!o.uuid || !(o.capabilities || []).includes("chat")) continue;
+    let u;
+    try {
+      u = await usage(o.uuid);
+    } catch (e) {
+      console.log("claude: usage for " + o.name + " failed: " + e.message);
+      continue;
+    }
+    if (hasQuota(u)) {
+      console.log("claude: using org " + o.name);
+      localStorage.setItem(ORG_KEY, o.uuid);
+      return u;
+    }
+    fallback = fallback || u;
+  }
+  if (!fallback) throw new Error("No claude.ai organization on this account");
+  return fallback;
 }
 
 let busy = false;
@@ -434,12 +475,11 @@ async function refresh() {
   if (busy) return;
   busy = true;
   try {
-    const org = await orgId();
-    data = parse(await api("/organizations/" + org + "/usage"));
+    data = parse(await fetchUsage());
     error = null;
   } catch (e) {
     error = String(e.message || e);
-    if (/rejected|HTTP 404/.test(error)) localStorage.removeItem("org");
+    if (/rejected|HTTP 404/.test(error)) localStorage.removeItem(ORG_KEY);
     console.warn("claude: " + error);
   }
   busy = false;

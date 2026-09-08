@@ -35,8 +35,15 @@ GET https://claude.ai/api/organizations
 GET https://claude.ai/api/organizations/<uuid>/usage
 ```
 
-Every 30 seconds by default. The organization id is cached in the plugin's
-local storage and dropped again when the session key is rejected.
+Every 30 seconds by default.
+
+One login can list several organizations. A Team or Enterprise member
+usually has three: a personal org whose usage reply is all nulls, an
+API-console org that answers `/usage` with a 403, and the Team org that
+holds the quota. The plugin probes each chat-capable org and keeps the first
+one that reports a quota, so personal and Team accounts both work. The
+chosen id is cached in the plugin's local storage and dropped again when it
+stops reporting a quota or the session key is rejected.
 
 ## Test
 
