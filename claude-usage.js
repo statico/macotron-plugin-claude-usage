@@ -61,7 +61,7 @@ const opts = macotron.plugin({
       type: "boolean",
       label: "Pace marker",
       default: true,
-      help: "A tick at the elapsed fraction of the window, colored by whether usage is ahead of it.",
+      help: "A tick at the elapsed fraction of the window, colored by whether usage is ahead of it (plain in monochrome).",
     },
     refreshMs: { type: "number", label: "Refresh interval", default: 30000, help: "Milliseconds. The default is 30 seconds." },
   },
@@ -266,7 +266,7 @@ function render(dark) {
   const draw = STYLES[opts.style] || STYLES.battery;
   const pieces = parts.map(([label, v]) => {
     const fill = mono ? fg : color(v.color, dark);
-    const pace = v.tier !== null ? color(PACE_COLOR[v.tier], dark) : fg;
+    const pace = v.tier !== null && !mono ? color(PACE_COLOR[v.tier], dark) : fg;
     return draw(v, label, fg, fill, pace);
   });
   const gap = 6;
@@ -280,8 +280,8 @@ function render(dark) {
   }
   return {
     svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${body}</svg>`,
-    // A monochrome icon without pace color is a plain mask the bar can tint.
-    template: mono && !opts.pace,
+    // A monochrome icon is a plain mask the bar tints for its own background.
+    template: mono,
   };
 }
 
@@ -347,9 +347,15 @@ function dashboard(dark) {
   return { html, height };
 }
 
+// The bar follows the wallpaper, not only the system theme, so the icon asks
+// the bar (Macotron 0.5.6+) and the dropdown asks the system.
+function barIsDark() {
+  return macotron.menubar.isDark ? macotron.menubar.isDark() : macotron.system.darkMode();
+}
+
 function paint() {
   const dark = macotron.system.darkMode();
-  const icon = render(dark);
+  const icon = render(barIsDark());
   macotron.menubar.status("claude-usage", {
     title: "",
     svg: icon.svg,
@@ -494,3 +500,4 @@ macotron.every(Math.max(10000, Number(opts.refreshMs) || 30000), refresh);
 // The window keeps moving while the data stands still, so the tick and the
 // countdown redraw each minute between fetches.
 macotron.every(60000, paint);
+macotron.on("menubar:appearance", paint);

@@ -8,7 +8,8 @@ globalThis.localStorage = { getItem: (k) => store[k] || null, setItem: (k, v) =>
 globalThis.macotron = {
   plugin: (m) => ({ sessionKey: "sk-ant-test", show: "both", style: "battery", color: "multi", labels: true, pace: true, refreshMs: 30000 }),
   system: { darkMode: () => true },
-  menubar: { status: (id, o) => calls.status.push(o) },
+  menubar: { status: (id, o) => calls.status.push(o), isDark: () => false },
+  on: () => {},
   checks: (c) => calls.checks.push(c),
   every: () => {},
   url: { open() {} },
@@ -90,6 +91,9 @@ t.opts.style = "battery"; t.opts.labels = true;
 t.opts.color = "mono"; t.opts.pace = false;
 assert(t.render(false).template === true, "mono without pace is a template");
 assert(!t.render(false).svg.includes("<line"), "no tick without pace");
+t.opts.pace = true;
+assert(t.render(false).template === true, "mono with pace is still a template");
+assert(!/stroke="#(?!000000)/.test(t.render(false).svg), "mono pace tick takes the text color");
 
 // End to end through the stubbed host.
 t.opts.color = "multi"; t.opts.pace = true;
