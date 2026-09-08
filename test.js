@@ -1,6 +1,6 @@
 // Self-check: stub the host, load the plugin, exercise the math and every style.
 // Run: node test.js
-const src = require("fs").readFileSync(__dirname + "/claude.js", "utf8");
+const src = require("fs").readFileSync(__dirname + "/claude-usage.js", "utf8");
 
 const calls = { status: [], checks: [] };
 const store = {};
