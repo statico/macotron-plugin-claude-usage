@@ -66,9 +66,15 @@ const UA =
 const HOUR = 3600e3;
 const SESSION_MS = 5 * HOUR;
 const WEEK_MS = 7 * 24 * HOUR;
-// CoreSVG wants PostScript names; a weight attribute does nothing.
+// CoreSVG ignores text-anchor and PostScript face names, but honors a numeric
+// font-weight. Centered text is placed by hand from Helvetica Bold advances.
 const FONT = "Helvetica";
-const FONT_BOLD = "Helvetica-Bold";
+const ADVANCE = { S: 0.667, W: 0.944, e: 0.556, s: 0.556, i: 0.278, o: 0.611, n: 0.611, k: 0.556, "%": 0.889, " ": 0.278 };
+function textWidth(s, size) {
+  let w = 0;
+  for (const c of s) w += ADVANCE[c] || 0.556;
+  return w * size;
+}
 
 // macOS system colors, light and dark.
 const SYS = {
@@ -144,9 +150,10 @@ function color(name, dark) {
 }
 
 function text(x, y, size, weight, fill, opacity, s, anchor) {
+  if (anchor === "middle") x -= textWidth(s, size) / 2;
   return (
-    `<text x="${x}" y="${y}" font-family="${weight >= 600 ? FONT_BOLD : FONT}" font-size="${size}"` +
-    ` fill="${fill}" fill-opacity="${opacity}" text-anchor="${anchor || "start"}">${s}</text>`
+    `<text x="${x}" y="${y}" font-family="${FONT}" font-weight="${weight >= 600 ? 700 : 400}" font-size="${size}"` +
+    ` fill="${fill}" fill-opacity="${opacity}">${s}</text>`
   );
 }
 
