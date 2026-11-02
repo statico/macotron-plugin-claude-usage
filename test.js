@@ -48,7 +48,7 @@ globalThis.macotron = {
 };
 function assert(ok, msg) { if (!ok) throw new Error("FAIL: " + msg); }
 
-(0, eval)(src + "\n;globalThis.__t = { elapsed, statusColor, paceTier, resetsIn, render, parse, view, STYLES, opts, setData: (d) => { data = d; } };");
+(0, eval)(src + "\n;globalThis.__t = { elapsed, statusColor, paceTier, resetsIn, render, parse, view, dashboard, STYLES, opts, setData: (d) => { data = d; } };");
 const t = globalThis.__t;
 const now = Date.now();
 
@@ -94,6 +94,17 @@ assert(!t.render(false).svg.includes("<line"), "no tick without pace");
 t.opts.pace = true;
 assert(t.render(false).template === true, "mono with pace is still a template");
 assert(!/stroke="#(?!000000)/.test(t.render(false).svg), "mono pace tick takes the text color");
+
+// Ultra: no five_hour block → week only, and the dropdown says so.
+const ultra = t.parse({ five_hour: null, seven_day: { utilization: 30 } });
+assert(ultra.session === null, "no session on Ultra");
+t.setData(ultra);
+assert((t.render(true).svg.match(/<g /g) || []).length === 1, "Ultra draws the week only");
+t.opts.show = "session";
+assert((t.render(true).svg.match(/<g /g) || []).length === 1, "session-only falls back to week on Ultra");
+t.opts.show = "both";
+assert(t.dashboard(true).html.includes("No session limit"), "dropdown notes no session limit");
+t.setData(d);
 
 // End to end through the stubbed host.
 t.opts.color = "multi"; t.opts.pace = true;

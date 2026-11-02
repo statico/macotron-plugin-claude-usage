@@ -260,7 +260,8 @@ function render(dark) {
   const mono = opts.color === "mono";
   const now = Date.now();
   const parts = [];
-  const want = (opts.show || "both").toLowerCase();
+  let want = (opts.show || "both").toLowerCase();
+  if (data && !data.session) want = "week";
   if (want !== "week") parts.push(["Session", view(data && data.session, SESSION_MS, now)]);
   if (want !== "session") parts.push(["Week", view(data && data.week, WEEK_MS, now)]);
   const draw = STYLES[opts.style] || STYLES.battery;
@@ -329,6 +330,7 @@ const CSS =
   ".fill{height:4px;border-radius:2.5px;transition:width .6s ease-in-out}" +
   ".mark{position:absolute;top:-2px;width:2.5px;height:8px;border-radius:1px}" +
   ".reset{font-size:9px;color:graytext;margin-top:4px}" +
+  ".note{color:graytext;font-size:12px}" +
   "</style>";
 
 // The popover's own inset: 14pt sides, 8pt top and bottom.
@@ -340,7 +342,11 @@ function dashboard(dark) {
     html += card(title, tag, subtitle, v, dark, now);
     height += cardHeight(subtitle, v);
   };
-  add("Session Usage", "", "5-hour rolling window", view(data.session, SESSION_MS, now));
+  if (data.session) add("Session Usage", "", "5-hour rolling window", view(data.session, SESSION_MS, now));
+  else {
+    html += `<div class="row note">No session limit on this plan</div>`;
+    height += 38;
+  }
   add("All models", "Weekly", "", view(data.week, WEEK_MS, now));
   // Per-model rows carry no marker in the original, hence no duration.
   for (const m of data.models) if (m.pct > 0) add(m.name, "Weekly", "", view(m, 0, now));
@@ -378,7 +384,8 @@ function paint() {
       message:
         error ||
         (data
-          ? "Session " + Math.floor(view(data.session, SESSION_MS, Date.now()).pct) + "% · Week " + Math.floor(data.week.pct) + "%"
+          ? (data.session ? "Session " + Math.floor(view(data.session, SESSION_MS, Date.now()).pct) + "% · " : "") +
+            "Week " + Math.floor(data.week.pct) + "%"
           : "Waiting"),
     },
   ]);
@@ -425,7 +432,8 @@ function parse(u) {
     if (i >= 0) models[i] = Object.assign(models[i], q, { name: models[i].name });
     else models.push(q);
   }
-  return { session: quota(u.five_hour), week: quota(u.seven_day), models };
+  // Ultra (verified) has no 5-hour window; the reply carries no five_hour block.
+  return { session: u.five_hour ? quota(u.five_hour) : null, week: quota(u.seven_day), models };
 }
 
 const ORG_KEY = "claude-usage.org";
